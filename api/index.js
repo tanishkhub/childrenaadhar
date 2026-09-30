@@ -49,7 +49,7 @@ app.post('/api/donations', async (req, res) => {
     const { volunteerId, type, amount, receiptImage } = req.body
     const volunteer = await Volunteer.findOne({ _id: volunteerId, active: true })
     if (!volunteer || !['cash', 'upi'].includes(type) || !Number(amount) || Number(amount) <= 0) return res.status(400).json({ error: 'Please complete all required fields.' })
-    if (type === 'upi' && !receiptImage) return res.status(400).json({ error: 'UPI receipt image is required.' })
+    if (type === 'upi' && (!receiptImage || !/^data:image\/jpeg;base64,/.test(receiptImage))) return res.status(400).json({ error: 'A valid UPI receipt image is required.' })
     const donation = await Donation.create({ volunteer: volunteer._id, volunteerName: volunteer.name, type, amount: Number(amount), receiptImage: type === 'upi' ? receiptImage : null })
     res.status(201).json({ donation })
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -62,6 +62,7 @@ app.post('/api/admin/login', (req, res) => {
 })
 app.get('/api/admin/volunteers', requireAdmin, async (req, res) => { try { await connect(); res.json(await Volunteer.find().sort({ active: -1, name: 1 })) } catch (e) { res.status(500).json({ error: e.message }) } })
 app.post('/api/admin/volunteers', requireAdmin, async (req, res) => { try { await connect(); const name = req.body.name?.trim(); if (!name) return res.status(400).json({ error: 'Name is required.' }); res.status(201).json(await Volunteer.create({ name })) } catch (e) { res.status(400).json({ error: e.code === 11000 ? 'This volunteer already exists.' : e.message }) } })
+app.put('/api/admin/volunteers/:id', requireAdmin, async (req, res) => { try { await connect(); const name = req.body.name?.trim(); if (!name) return res.status(400).json({ error: 'Name is required.' }); const old = await Volunteer.findById(req.params.id); if (!old) return res.status(404).json({ error: 'Volunteer not found.' }); const volunteer = await Volunteer.findByIdAndUpdate(req.params.id, { name }, { new: true, runValidators: true }); await Donation.updateMany({ volunteer: volunteer._id }, { volunteerName: volunteer.name }); res.json(volunteer) } catch (e) { res.status(400).json({ error: e.code === 11000 ? 'This volunteer already exists.' : e.message }) } })
 app.delete('/api/admin/volunteers/:id', requireAdmin, async (req, res) => { try { await connect(); await Volunteer.findByIdAndUpdate(req.params.id, { active: false }); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) } })
 app.get('/api/admin/dashboard', requireAdmin, async (req, res) => {
   try {
