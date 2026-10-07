@@ -141,6 +141,40 @@ select {
   color: #b43737;
   font-size: 14px;
 }
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 14px;
+}
+.calendar-day {
+  min-height: 52px;
+  border-radius: 9px;
+  padding: 6px;
+  background: #f1f4f1;
+  font-size: 11px;
+}
+.calendar-day b,
+.calendar-day span {
+  display: block;
+}
+.calendar-day span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #547064;
+  margin-top: 3px;
+}
+.calendar-day.hit {
+  background: #dff3e5;
+  border: 1px solid #91d0a4;
+}
+.calendar-day.miss {
+  background: #fff0f0;
+  border: 1px solid #efc1c1;
+}
+.calendar-day.future {
+  opacity: 0.5;
+}
 .good {
   color: #087150;
 }
@@ -280,6 +314,24 @@ select {
   color: #15573f;
   font: inherit;
   font-size: 12px;
+  font-weight: 700;
+}
+.donation-actions {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+}
+.receipt.void {
+  background: #fff0f0;
+  color: #a52f2f;
+}
+.export {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #e2f0e6;
+  color: #15573f;
+  font: inherit;
   font-weight: 700;
 }
 .filters {

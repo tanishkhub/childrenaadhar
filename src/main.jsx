@@ -22,6 +22,11 @@ const date = (value) =>
     dateStyle: "medium",
     timeStyle: "short",
   });
+const urlBase64ToUint8Array = (value) => {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+};
 async function shrinkImage(file) {
   const source = await new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -205,11 +210,45 @@ function DonationHome({ token, me, refreshMe }) {
   const [today, setToday] = useState(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [queued, setQueued] = useState(
+    () =>
+      JSON.parse(localStorage.getItem("caf-pending-donations") || "[]").length,
+  );
   useEffect(() => {
     api("/api/me/progress", { headers: authHeaders(token) })
       .then((x) => setToday(x.today))
       .catch((e) => setNote(e.message));
   }, []);
+  useEffect(() => {
+    const sync = () => syncQueued();
+    window.addEventListener("online", sync);
+    sync();
+    return () => window.removeEventListener("online", sync);
+  }, []);
+  async function syncQueued() {
+    const pending = JSON.parse(
+      localStorage.getItem("caf-pending-donations") || "[]",
+    );
+    if (!pending.length || !navigator.onLine) return;
+    const remaining = [];
+    for (const item of pending) {
+      try {
+        await api("/api/donations", {
+          method: "POST",
+          headers: authHeaders(token),
+          body: JSON.stringify(item),
+        });
+      } catch {
+        remaining.push(item);
+      }
+    }
+    localStorage.setItem("caf-pending-donations", JSON.stringify(remaining));
+    setQueued(remaining.length);
+    if (!remaining.length) {
+      setNote("Offline donations synced successfully.");
+      refreshMe();
+    }
+  }
   async function file(e) {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -240,40 +279,49 @@ function DonationHome({ token, me, refreshMe }) {
       setNote("Donation saved — great work!");
       refreshMe();
     } catch (e) {
-      setNote(e.message);
+      if (!navigator.onLine || e.message.includes("Failed to fetch")) {
+        const pending = JSON.parse(
+          localStorage.getItem("caf-pending-donations") || "[]",
+        );
+        pending.push({ type, amount, receiptImage: image });
+        localStorage.setItem("caf-pending-donations", JSON.stringify(pending));
+        setQueued(pending.length);
+        setAmount("");
+        setImage("");
+        setNote(
+          "No connection — donation saved safely on this phone and will sync automatically.",
+        );
+      } else setNote(e.message);
     } finally {
       setBusy(false);
     }
   }
-  function reminders() {
-    if (!("Notification" in window))
-      return setNote("Notifications are not supported by this browser.");
-    Notification.requestPermission().then((p) => {
-      if (p !== "granted")
+  async function reminders() {
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window))
+        return setNote("Background push is not supported by this browser.");
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted")
         return setNote("Notification permission was not granted.");
-      const now = new Date();
-      const slots = [12, 16, 19]
-        .map((hour) => {
-          const d = new Date();
-          d.setHours(hour, 0, 0, 0);
-          return d;
-        })
-        .filter((d) => d > now);
-      slots.forEach((d) =>
-        setTimeout(
-          () =>
-            new Notification("Children Aadhar Foundation", {
-              body: `Progress check: ${money.format(today?.total || 0)} collected towards today’s ${money.format(target)} target.`,
-            }),
-          d - now,
-        ),
-      );
+      const { publicKey } = await api("/api/push/public-key", {
+        headers: authHeaders(token),
+      });
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+      await api("/api/me/push-subscription", {
+        method: "POST",
+        headers: authHeaders(token),
+        body: JSON.stringify({ subscription }),
+      });
       setNote(
-        slots.length
-          ? "Today’s remaining phase reminders are set while this page stays open."
-          : "Today’s collection is complete — reminders resume tomorrow when you open the app.",
+        "Background reminders are enabled, including when the app is closed.",
       );
-    });
+    } catch (e) {
+      setNote(e.message);
+    }
   }
   const total = today?.total || 0;
   const target = me.dailyTarget || 0;
@@ -353,6 +401,12 @@ function DonationHome({ token, me, refreshMe }) {
             }
           >
             {note}
+          </p>
+        )}
+        {queued > 0 && (
+          <p className="notice">
+            {queued} donation{queued > 1 ? "s" : ""} waiting to sync when you
+            are online.
           </p>
         )}
       </section>
@@ -444,6 +498,18 @@ function Progress({ token, me }) {
     api("/api/me/progress", { headers: authHeaders(token) }).then(setData);
   }, []);
   if (!data) return <section className="card">Loading progress…</section>;
+  const now = new Date();
+  const monthDays = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+  ).getDate();
+  const startDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+  const byDay = new Map(data.days.map((day) => [day._id, day]));
+  const monthLabel = now.toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
   return (
     <>
       <section className="goal-card">
@@ -456,6 +522,33 @@ function Progress({ token, me }) {
           </h2>
           <p className="hint">Hit your daily target to extend your streak.</p>
           <b>{money.format(data.today.total)} collected today</b>
+        </div>
+      </section>
+      <section className="card">
+        <h2>{monthLabel}</h2>
+        <p className="hint">
+          Monthly collection: <b>{money.format(data.monthTotal)}</b> · Green =
+          target achieved, red = missed
+        </p>
+        <div className="calendar">
+          {Array.from({ length: startDay }).map((_, index) => (
+            <span key={`blank-${index}`} />
+          ))}
+          {Array.from({ length: monthDays }, (_, index) => {
+            const day = index + 1;
+            const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            const record = byDay.get(key);
+            const isPast = day <= now.getDate();
+            return (
+              <div
+                className={`calendar-day ${isPast ? (record?.total >= data.target ? "hit" : "miss") : "future"}`}
+                key={key}
+              >
+                <b>{day}</b>
+                <span>{record ? money.format(record.total) : "—"}</span>
+              </div>
+            );
+          })}
         </div>
       </section>
       <section className="card">
@@ -516,7 +609,7 @@ function Target({ token, me, refreshMe }) {
     </section>
   );
 }
-function DonationRows({ items, admin = false }) {
+function DonationRows({ items, admin = false, onEdit, onVoid }) {
   const [image, setImage] = useState("");
   return (
     <>
@@ -536,6 +629,16 @@ function DonationRows({ items, admin = false }) {
               >
                 View receipt
               </button>
+            )}
+            {admin && d.status !== "void" && (
+              <span className="donation-actions">
+                <button className="receipt" onClick={() => onEdit?.(d)}>
+                  Edit
+                </button>
+                <button className="receipt void" onClick={() => onVoid?.(d)}>
+                  Void
+                </button>
+              </span>
             )}
           </span>
         </div>
@@ -644,7 +747,12 @@ function Admin() {
   }
   async function open(v) {
     setSelected(v);
-    setEdit({ name: v.name, email: v.email, dailyTarget: v.dailyTarget, password: "" });
+    setEdit({
+      name: v.name,
+      email: v.email,
+      dailyTarget: v.dailyTarget,
+      password: "",
+    });
     setDetail(await api(`/api/admin/volunteers/${v.id}/detail`, { headers }));
   }
   async function updateVolunteer(e) {
@@ -660,12 +768,55 @@ function Admin() {
     await open(updated);
   }
   async function deleteVolunteer() {
-    if (!confirm(`Deactivate ${selected.name}'s account? They will no longer be able to sign in.`)) return;
-    await api(`/api/admin/volunteers/${selected.id}`, { method: "DELETE", headers });
+    if (
+      !confirm(
+        `Deactivate ${selected.name}'s account? They will no longer be able to sign in.`,
+      )
+    )
+      return;
+    await api(`/api/admin/volunteers/${selected.id}`, {
+      method: "DELETE",
+      headers,
+    });
     setSelected(null);
     setDetail(null);
     setEdit(null);
     load();
+  }
+  async function editDonation(donation) {
+    const amount = prompt("Correct amount", donation.amount);
+    if (!amount || Number(amount) <= 0) return;
+    await api(`/api/admin/donations/${donation._id}`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ amount }),
+    });
+    await open(selected);
+    load();
+  }
+  async function voidDonation(donation) {
+    const reason = prompt(
+      "Reason for voiding this donation",
+      "Duplicate or incorrect entry",
+    );
+    if (reason === null) return;
+    await api(`/api/admin/donations/${donation._id}/void`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ reason }),
+    });
+    await open(selected);
+    load();
+  }
+  async function exportCsv() {
+    const response = await fetch("/api/admin/export", { headers });
+    if (!response.ok) return alert("Could not export collections.");
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "children-aadhar-collections.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   }
   if (!token)
     return (
@@ -684,7 +835,10 @@ function Admin() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <button type="button" onClick={() => setShowPassword(!showPassword)}>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+              >
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
@@ -714,6 +868,9 @@ function Admin() {
         >
           Log out
         </button>
+        <button className="export" onClick={exportCsv}>
+          Export CSV
+        </button>
       </header>
       <section className="stats">
         <div>
@@ -736,22 +893,27 @@ function Admin() {
       <section className="card">
         <h2>Today’s volunteer progress</h2>
         <div className="volunteer-grid">
-          {data?.volunteers.map((v) => (
-            <button
-              className="admin-volunteer"
-              onClick={() => open(v)}
-              key={v.id}
-            >
-              <Ring total={v.today.total} target={v.dailyTarget} size={90} />
-              <span>
-                <b>{v.name}</b>
-                <small>
-                  {money.format(v.today.total)} / {money.format(v.dailyTarget)}
-                </small>
-                <small>{v.today.count} donations today</small>
-              </span>
-            </button>
-          ))}
+          {[...(data?.volunteers || [])]
+            .sort((a, b) => b.today.total - a.today.total)
+            .map((v, index) => (
+              <button
+                className="admin-volunteer"
+                onClick={() => open(v)}
+                key={v.id}
+              >
+                <Ring total={v.today.total} target={v.dailyTarget} size={90} />
+                <span>
+                  <b>
+                    #{index + 1} · {v.name}
+                  </b>
+                  <small>
+                    {money.format(v.today.total)} /{" "}
+                    {money.format(v.dailyTarget)}
+                  </small>
+                  <small>{v.today.count} donations today</small>
+                </span>
+              </button>
+            ))}
         </div>
       </section>
       <section className="card">
@@ -803,25 +965,60 @@ function Admin() {
                 {selected.email} · Target {money.format(selected.dailyTarget)}
               </p>
               <h3>Manage account</h3>
-              <form className="account-form edit-account" onSubmit={updateVolunteer}>
+              <form
+                className="account-form edit-account"
+                onSubmit={updateVolunteer}
+              >
                 <label>
                   Name
-                  <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} required />
+                  <input
+                    value={edit.name}
+                    onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+                    required
+                  />
                 </label>
                 <label>
                   Email address
-                  <input type="email" value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} required />
+                  <input
+                    type="email"
+                    value={edit.email}
+                    onChange={(e) =>
+                      setEdit({ ...edit, email: e.target.value })
+                    }
+                    required
+                  />
                 </label>
                 <label>
                   New password <small>(leave empty to keep current)</small>
-                  <input type="password" minLength="6" value={edit.password} onChange={(e) => setEdit({ ...edit, password: e.target.value })} />
+                  <input
+                    type="password"
+                    minLength="6"
+                    value={edit.password}
+                    onChange={(e) =>
+                      setEdit({ ...edit, password: e.target.value })
+                    }
+                  />
                 </label>
                 <label>
                   Daily target ₹
-                  <input type="number" min="0" value={edit.dailyTarget} onChange={(e) => setEdit({ ...edit, dailyTarget: e.target.value })} required />
+                  <input
+                    type="number"
+                    min="0"
+                    value={edit.dailyTarget}
+                    onChange={(e) =>
+                      setEdit({ ...edit, dailyTarget: e.target.value })
+                    }
+                    required
+                  />
                 </label>
                 <button className="save">Save changes</button>
-                <button className="danger-button" type="button" onClick={deleteVolunteer}>Deactivate volunteer</button>
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={deleteVolunteer}
+                >
+                  Deactivate volunteer
+                </button>
               </form>
               <h3>Daily performance</h3>
               {detail.days.map((d) => (
@@ -834,7 +1031,12 @@ function Admin() {
                 </div>
               ))}
               <h3>Collection history</h3>
-              <DonationRows items={detail.donations} admin />
+              <DonationRows
+                items={detail.donations}
+                admin
+                onEdit={editDonation}
+                onVoid={voidDonation}
+              />
             </>
           ) : (
             <p>Loading…</p>

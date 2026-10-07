@@ -18,6 +18,12 @@ Import this GitHub repository into Vercel. In **Project Settings → Environment
 
 Deploy. The included `vercel.json` sends `/api/*` requests to the Express serverless function and serves the React app elsewhere.
 
+### Background push notifications
+
+To enable reliable reminders when the browser is closed, generate VAPID keys once with `npx web-push generate-vapid-keys`. Add the resulting `publicKey` and `privateKey` in Vercel as `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. Also add `VAPID_SUBJECT` (for example, `mailto:your-email@example.com`) and a long random `CRON_SECRET`.
+
+Vercel then runs the included morning, afternoon, and evening reminder jobs. Volunteers must open the app once and tap **Enable reminders** to subscribe.
+
 ### MongoDB Atlas setting
 
 In Atlas, allow Vercel access under **Network Access**. For a quick first deployment use `0.0.0.0/0`; then restrict it if you have Vercel's outbound IP details available. Never put the database URL or admin password in frontend code or commit it to GitHub.
