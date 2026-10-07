@@ -611,6 +611,7 @@ function Admin() {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [edit, setEdit] = useState(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -643,7 +644,28 @@ function Admin() {
   }
   async function open(v) {
     setSelected(v);
+    setEdit({ name: v.name, email: v.email, dailyTarget: v.dailyTarget, password: "" });
     setDetail(await api(`/api/admin/volunteers/${v.id}/detail`, { headers }));
+  }
+  async function updateVolunteer(e) {
+    e.preventDefault();
+    const payload = { ...edit };
+    if (!payload.password) delete payload.password;
+    const updated = await api(`/api/admin/volunteers/${selected.id}`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    await load();
+    await open(updated);
+  }
+  async function deleteVolunteer() {
+    if (!confirm(`Deactivate ${selected.name}'s account? They will no longer be able to sign in.`)) return;
+    await api(`/api/admin/volunteers/${selected.id}`, { method: "DELETE", headers });
+    setSelected(null);
+    setDetail(null);
+    setEdit(null);
+    load();
   }
   if (!token)
     return (
@@ -780,6 +802,27 @@ function Admin() {
               <p className="hint">
                 {selected.email} · Target {money.format(selected.dailyTarget)}
               </p>
+              <h3>Manage account</h3>
+              <form className="account-form edit-account" onSubmit={updateVolunteer}>
+                <label>
+                  Name
+                  <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} required />
+                </label>
+                <label>
+                  Email address
+                  <input type="email" value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} required />
+                </label>
+                <label>
+                  New password <small>(leave empty to keep current)</small>
+                  <input type="password" minLength="6" value={edit.password} onChange={(e) => setEdit({ ...edit, password: e.target.value })} />
+                </label>
+                <label>
+                  Daily target ₹
+                  <input type="number" min="0" value={edit.dailyTarget} onChange={(e) => setEdit({ ...edit, dailyTarget: e.target.value })} required />
+                </label>
+                <button className="save">Save changes</button>
+                <button className="danger-button" type="button" onClick={deleteVolunteer}>Deactivate volunteer</button>
+              </form>
               <h3>Daily performance</h3>
               {detail.days.map((d) => (
                 <div className="row" key={d._id}>

@@ -382,6 +382,20 @@ select {
 .account-form .save {
   grid-column: span 2;
 }
+.account-form .danger-button {
+  grid-column: span 2;
+  border: 1px solid #f0caca;
+  border-radius: 11px;
+  padding: 12px;
+  background: #fff4f4;
+  color: #a52f2f;
+  font: inherit;
+  font-weight: 700;
+}
+.account-form small {
+  color: #658076;
+  font-weight: 500;
+}
 .detail {
   max-width: 720px;
 }
