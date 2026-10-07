@@ -715,6 +715,7 @@ function Admin() {
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [edit, setEdit] = useState(null);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -892,8 +893,19 @@ function Admin() {
       </section>
       <section className="card">
         <h2>Today’s volunteer progress</h2>
+        <input
+          className="admin-search"
+          placeholder="Search volunteer by name or email"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <div className="volunteer-grid">
           {[...(data?.volunteers || [])]
+            .filter((v) =>
+              `${v.name} ${v.email}`
+                .toLowerCase()
+                .includes(search.toLowerCase()),
+            )
             .sort((a, b) => b.today.total - a.today.total)
             .map((v, index) => (
               <button

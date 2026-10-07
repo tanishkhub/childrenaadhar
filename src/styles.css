@@ -408,6 +408,9 @@ select {
   gap: 10px;
   margin-top: 16px;
 }
+.admin-search {
+  margin-top: 14px;
+}
 .admin-volunteer {
   display: flex;
   align-items: center;
