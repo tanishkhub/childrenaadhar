@@ -819,6 +819,14 @@ function Admin() {
     link.click();
     URL.revokeObjectURL(url);
   }
+  async function testPush() {
+    try {
+      const r = await api("/api/admin/test-push", { method: "POST", headers });
+      alert(`Test notification sent to ${r.sent} subscription(s).`);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
   if (!token)
     return (
       <main className="page login">
@@ -871,6 +879,9 @@ function Admin() {
         </button>
         <button className="export" onClick={exportCsv}>
           Export CSV
+        </button>
+        <button className="export" onClick={testPush}>
+          Test notifications
         </button>
       </header>
       <section className="stats">

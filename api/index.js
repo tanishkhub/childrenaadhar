@@ -577,6 +577,44 @@ app.get("/api/admin/volunteers/:id/detail", auth("admin"), async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+app.post("/api/admin/test-push", auth("admin"), async (req, res) => {
+  try {
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY)
+      return res.status(503).json({ error: "VAPID is not configured." });
+    await connect();
+    const volunteers = await Volunteer.find({
+      active: true,
+      "pushSubscriptions.0": { $exists: true },
+    });
+    let sent = 0;
+    await Promise.all(
+      volunteers.flatMap((volunteer) =>
+        volunteer.pushSubscriptions.map(async (subscription) => {
+          try {
+            await webpush.sendNotification(
+              subscription.toObject ? subscription.toObject() : subscription,
+              JSON.stringify({
+                title: "Children Aadhar Foundation",
+                body: "Test notification from admin.",
+                url: "/",
+              }),
+            );
+            sent++;
+          } catch (error) {
+            if ([404, 410].includes(error.statusCode))
+              await Volunteer.updateOne(
+                { _id: volunteer._id },
+                { $pull: { pushSubscriptions: { endpoint: subscription.endpoint } } },
+              );
+          }
+        }),
+      ),
+    );
+    res.json({ ok: true, sent });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get("/api/cron/:phase", async (req, res) => {
   try {
     if (
