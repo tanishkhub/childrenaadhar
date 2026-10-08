@@ -877,12 +877,10 @@ function Admin() {
         >
           Log out
         </button>
-        <button className="export" onClick={exportCsv}>
-          Export CSV
-        </button>
-        <button className="export" onClick={testPush}>
-          Test notifications
-        </button>
+        <div className="admin-actions">
+          <button className="export" onClick={exportCsv}>⬇ Export CSV</button>
+          <button className="btn-test" onClick={testPush}>🔔 Test notifications</button>
+        </div>
       </header>
       <section className="stats">
         <div>
@@ -902,11 +900,14 @@ function Admin() {
           <strong>{money.format(totals.upi || 0)}</strong>
         </div>
       </section>
-      <section className="card">
-        <h2>Today’s volunteer progress</h2>
+         <section className="card">
+        <div className="section-header">
+          <h2>Today’s volunteer progress</h2>
+          <span className="badge-count">{data?.volunteers?.length || 0} volunteers</span>
+        </div>
         <input
           className="admin-search"
-          placeholder="Search volunteer by name or email"
+          placeholder="Search by name or email"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -918,25 +919,25 @@ function Admin() {
                 .includes(search.toLowerCase()),
             )
             .sort((a, b) => b.today.total - a.today.total)
-            .map((v, index) => (
-              <button
-                className="admin-volunteer"
-                onClick={() => open(v)}
-                key={v.id}
-              >
-                <Ring total={v.today.total} target={v.dailyTarget} size={90} />
-                <span>
-                  <b>
-                    #{index + 1} · {v.name}
-                  </b>
-                  <small>
-                    {money.format(v.today.total)} /{" "}
-                    {money.format(v.dailyTarget)}
-                  </small>
-                  <small>{v.today.count} donations today</small>
-                </span>
-              </button>
-            ))}
+            .map((v, index) => {
+              const pct = v.dailyTarget ? Math.min(100, Math.round((v.today.total / v.dailyTarget) * 100)) : 0;
+              return (
+                <button className="admin-volunteer" onClick={() => open(v)} key={v.id}>
+                  <div className="admin-volunteer-top">
+                    <Ring total={v.today.total} target={v.dailyTarget} size={90} />
+                    <span>
+                      <span className="vol-rank">#{index + 1}</span>
+                      <b>{v.name}</b>
+                      <small>{money.format(v.today.total)} / {money.format(v.dailyTarget)}</small>
+                      <small>{v.today.count} donation{v.today.count !== 1 ? "s" : ""} today</small>
+                    </span>
+                  </div>
+                  <div className="vol-progress-bar">
+                    <div className="vol-progress-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                </button>
+              );
+            })}
         </div>
       </section>
       <section className="card">

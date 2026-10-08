@@ -24,6 +24,23 @@ body {
 .admin {
   max-width: 1100px;
 }
+.admin > header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f4f8f4;
+  border-bottom: 1px solid #dce9df;
+  padding: 12px 0 14px;
+  margin: 0 0 24px;
+  gap: 10px;
+}
+.admin-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 header {
   position: relative;
   display: flex;
@@ -328,11 +345,24 @@ select {
 .export {
   border: 0;
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 9px 14px;
   background: #e2f0e6;
   color: #15573f;
   font: inherit;
+  font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
+}
+.btn-test {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 14px;
+  background: #fff3cd;
+  color: #7a5800;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 .filters {
   display: grid;
@@ -384,55 +414,115 @@ select {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .stats div {
-  padding: 15px;
+  padding: 18px 16px;
   background: #fff;
   border: 1px solid #e2ebe3;
-  border-radius: 14px;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px #17452d08;
+  transition: box-shadow 0.15s;
+}
+.stats div:hover {
+  box-shadow: 0 4px 16px #17452d14;
 }
 .stats span {
   display: block;
   color: #658076;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 .stats strong {
-  font-size: 19px;
+  font-size: 22px;
   display: block;
-  margin-top: 5px;
+  margin-top: 6px;
+  letter-spacing: -0.5px;
 }
+.stats div:nth-child(1) strong { color: #0c6b50; }
+.stats div:nth-child(3) strong { color: #2e6da4; }
+.stats div:nth-child(4) strong { color: #7a5800; }
 .volunteer-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
   margin-top: 16px;
 }
 .admin-search {
   margin-top: 14px;
+  background: #f7faf7;
+  border-color: #c8d9cc;
+}
+.admin-search:focus {
+  outline: none;
+  border-color: #0c6b50;
+  background: #fff;
+  box-shadow: 0 0 0 3px #0c6b5018;
 }
 .admin-volunteer {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  padding: 10px;
+  padding: 14px;
   border: 1px solid #d7e6da;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #fbfefb;
   color: #17362e;
   text-align: left;
   font: inherit;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+.admin-volunteer:hover {
+  border-color: #0c6b50;
+  box-shadow: 0 4px 16px #0c6b5014;
+}
+.admin-volunteer-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .admin-volunteer .ring {
   transform: scale(0.75);
   margin: -11px;
+  flex: none;
 }
 .admin-volunteer b {
   display: block;
-  font-size: 15px;
+  font-size: 14px;
+}
+.vol-progress-bar {
+  width: 100%;
+  height: 5px;
+  background: #e2ebe3;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.vol-progress-fill {
+  height: 100%;
+  background: #0c6b50;
+  border-radius: 99px;
+  transition: width 0.4s;
+}
+.vol-rank {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  background: #e6f4eb;
+  color: #0c6b50;
+  border-radius: 99px;
+  padding: 2px 7px;
+  margin-bottom: 2px;
 }
 .account-form {
   grid-template-columns: 1fr 1fr;
+}
+.account-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 .account-form .save {
   grid-column: span 2;
@@ -451,15 +541,38 @@ select {
   color: #658076;
   font-weight: 500;
 }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.section-header h2 {
+  margin: 0;
+}
+.badge-count {
+  font-size: 12px;
+  font-weight: 700;
+  background: #e6f4eb;
+  color: #0c6b50;
+  border-radius: 99px;
+  padding: 3px 10px;
+}
 .detail {
   max-width: 720px;
 }
 .back-button {
-  border: 0;
-  background: transparent;
-  padding: 0 0 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #d0e4d6;
+  background: #fff;
+  border-radius: 9px;
+  padding: 7px 12px;
+  margin-bottom: 18px;
   color: #0c6b50;
   font: inherit;
+  font-size: 13px;
   font-weight: 700;
 }
 .receipt {
@@ -500,7 +613,7 @@ select {
     grid-template-columns: 1fr 1fr;
   }
   .admin-volunteer {
-    padding: 6px;
+    padding: 10px;
   }
   .admin-volunteer .ring {
     transform: scale(0.62);
@@ -520,6 +633,13 @@ select {
   }
   .phase span {
     font-size: 10px;
+  }
+  .admin-actions {
+    gap: 6px;
+  }
+  .export, .btn-test {
+    padding: 8px 10px;
+    font-size: 12px;
   }
 }
 .upload-options {
