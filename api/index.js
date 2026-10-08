@@ -5,6 +5,7 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const webpush = require("web-push");
+const XLSX = require("xlsx");
 
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
@@ -577,15 +578,62 @@ app.get("/api/admin/volunteers/:id/detail", auth("admin"), async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-app.post("/api/admin/test-push", auth("admin"), async (req, res) => {
+app.get("/api/admin/export/excel", auth("admin"), async (req, res) => {
+  try {
+    await connect();
+    const filter = { status: { $ne: "void" }, ...dateFilter(req.query) };
+    if (req.query.volunteerId) filter.volunteer = req.query.volunteerId;
+    if (["cash", "upi"].includes(req.query.type)) filter.type = req.query.type;
+    const rows = await Donation.find(filter)
+      .sort({ collectedAt: -1 })
+      .select("volunteerName type amount collectedAt status")
+      .lean();
+    const ws = XLSX.utils.json_to_sheet(
+      rows.map((d) => ({
+        Volunteer: d.volunteerName,
+        Type: d.type,
+        Amount: d.amount,
+        "Date & time": new Date(d.collectedAt).toISOString(),
+        Status: d.status,
+      })),
+    );
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Collections");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=children-aadhar-collections.xlsx");
+    res.send(buf);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.get("/api/admin/export/json", auth("admin"), async (req, res) => {
+  try {
+    await connect();
+    const filter = { status: { $ne: "void" }, ...dateFilter(req.query) };
+    if (req.query.volunteerId) filter.volunteer = req.query.volunteerId;
+    if (["cash", "upi"].includes(req.query.type)) filter.type = req.query.type;
+    const rows = await Donation.find(filter)
+      .sort({ collectedAt: -1 })
+      .select("volunteerName type amount collectedAt status")
+      .lean();
+    res.setHeader("Content-Disposition", "attachment; filename=children-aadhar-collections.json");
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post("/api/admin/send-push", auth("admin"), async (req, res) => {
   try {
     if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY)
       return res.status(503).json({ error: "VAPID is not configured." });
+    const { title, body, volunteerId } = req.body;
+    if (!title?.trim() || !body?.trim())
+      return res.status(400).json({ error: "Title and body are required." });
     await connect();
-    const volunteers = await Volunteer.find({
-      active: true,
-      "pushSubscriptions.0": { $exists: true },
-    });
+    const query = { active: true, "pushSubscriptions.0": { $exists: true } };
+    if (volunteerId) query._id = volunteerId;
+    const volunteers = await Volunteer.find(query);
     let sent = 0;
     await Promise.all(
       volunteers.flatMap((volunteer) =>
@@ -593,11 +641,7 @@ app.post("/api/admin/test-push", auth("admin"), async (req, res) => {
           try {
             await webpush.sendNotification(
               subscription.toObject ? subscription.toObject() : subscription,
-              JSON.stringify({
-                title: "Children Aadhar Foundation",
-                body: "Test notification from admin.",
-                url: "/",
-              }),
+              JSON.stringify({ title: title.trim(), body: body.trim(), url: "/" }),
             );
             sent++;
           } catch (error) {

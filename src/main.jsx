@@ -722,6 +722,9 @@ function Admin() {
     password: "",
     dailyTarget: 10000,
   });
+  const [pushForm, setPushForm] = useState({ title: "Children Aadhar Foundation", body: "", volunteerId: "" });
+  const [pushNote, setPushNote] = useState("");
+  const [pushBusy, setPushBusy] = useState(false);
   const headers = useMemo(() => authHeaders(token), [token]);
   const load = () => api("/api/admin/dashboard", { headers }).then(setData);
   useEffect(() => {
@@ -809,22 +812,34 @@ function Admin() {
     await open(selected);
     load();
   }
-  async function exportCsv() {
-    const response = await fetch("/api/admin/export", { headers });
+  async function exportAs(format) {
+    const url = format === "csv" ? "/api/admin/export" : `/api/admin/export/${format}`;
+    const ext = format === "excel" ? "xlsx" : format;
+    const response = await fetch(url, { headers });
     if (!response.ok) return alert("Could not export collections.");
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "children-aadhar-collections.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    const blob = await response.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `children-aadhar-collections.${ext}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
-  async function testPush() {
+  async function sendPush(e) {
+    e.preventDefault();
+    setPushBusy(true);
+    setPushNote("");
     try {
-      const r = await api("/api/admin/test-push", { method: "POST", headers });
-      alert(`Test notification sent to ${r.sent} subscription(s).`);
-    } catch (e) {
-      alert(e.message);
+      const r = await api("/api/admin/send-push", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(pushForm),
+      });
+      setPushNote(`✓ Sent to ${r.sent} device${r.sent !== 1 ? "s" : ""}.`);
+      setPushForm((f) => ({ ...f, body: "" }));
+    } catch (err) {
+      setPushNote(err.message);
+    } finally {
+      setPushBusy(false);
     }
   }
   if (!token)
@@ -862,24 +877,30 @@ function Admin() {
   const totals = data?.totals || {};
   return (
     <main className="page admin">
-      <header>
-        <div className="mark">♥</div>
-        <div>
-          <h1>Command centre</h1>
-          <p>Children Aadhar Foundation</p>
+      <header className="admin-header">
+        <div className="admin-header-top">
+          <div className="mark">♥</div>
+          <div>
+            <h1>Command centre</h1>
+            <p>Children Aadhar Foundation</p>
+          </div>
+          <button
+            className="logout"
+            onClick={() => {
+              localStorage.removeItem("caf-admin");
+              setToken("");
+            }}
+          >
+            Log out
+          </button>
         </div>
-        <button
-          className="logout"
-          onClick={() => {
-            localStorage.removeItem("caf-admin");
-            setToken("");
-          }}
-        >
-          Log out
-        </button>
-        <div className="admin-actions">
-          <button className="export" onClick={exportCsv}>⬇ Export CSV</button>
-          <button className="btn-test" onClick={testPush}>🔔 Test notifications</button>
+        <div className="admin-header-actions">
+          <div className="export-group">
+            <span className="export-label">Export</span>
+            <button className="export-btn" onClick={() => exportAs("csv")}>CSV</button>
+            <button className="export-btn" onClick={() => exportAs("excel")}>Excel</button>
+            <button className="export-btn" onClick={() => exportAs("json")}>JSON</button>
+          </div>
         </div>
       </header>
       <section className="stats">
@@ -1067,6 +1088,49 @@ function Admin() {
           )}
         </section>
       )}
+      <section className="card">
+        <h2>Send notification</h2>
+        <p className="hint">Send a push notification to one or all volunteers.</p>
+        <form className="push-form" onSubmit={sendPush}>
+          <label>
+            Title
+            <input
+              value={pushForm.title}
+              onChange={(e) => setPushForm((f) => ({ ...f, title: e.target.value }))}
+              required
+            />
+          </label>
+          <label>
+            Message
+            <textarea
+              className="push-textarea"
+              rows={3}
+              value={pushForm.body}
+              onChange={(e) => setPushForm((f) => ({ ...f, body: e.target.value }))}
+              placeholder="Type your message here…"
+              required
+            />
+          </label>
+          <label>
+            Send to
+            <select
+              value={pushForm.volunteerId}
+              onChange={(e) => setPushForm((f) => ({ ...f, volunteerId: e.target.value }))}
+            >
+              <option value="">All volunteers</option>
+              {(data?.volunteers || []).map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </label>
+          <button className="save" disabled={pushBusy}>
+            {pushBusy ? "Sending…" : "Send notification"}
+          </button>
+        </form>
+        {pushNote && (
+          <p className={pushNote.startsWith("✓") ? "notice good" : "notice"}>{pushNote}</p>
+        )}
+      </section>
     </main>
   );
 }
