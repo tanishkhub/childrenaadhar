@@ -299,7 +299,7 @@ function DonationHome({ token, me, refreshMe }) {
   async function reminders() {
     try {
       if (!("serviceWorker" in navigator) || !("PushManager" in window))
-        return setNote("Background push is not supported by this browser.");
+        return setNote("To enable reminders, add this app to your home screen first: tap Share → Add to Home Screen, then reopen and try again.");
       const permission = await Notification.requestPermission();
       if (permission !== "granted")
         return setNote("Notification permission was not granted.");
